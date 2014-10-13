@@ -89,6 +89,12 @@ function problemTemplateRendered() {
     // 'Check Answer' or 'Submit Answer'
     originalCheckAnswerText = $("#check-answer-button").val();
 
+    // Allow navigation in attemptAllAtEnd mode
+    if (Exercises.attemptAllAtEnd) {
+        $("#navigation-forward-button").click(handleNavigateForward);
+        $("#navigation-backward-button").click(handleNavigateBackward);
+    }
+
     // Solution submission
     $("#check-answer-button").click(handleCheckAnswer);
     $("#answerform").submit(handleCheckAnswer);
@@ -209,6 +215,51 @@ function newProblem(e, data) {
             Exercises.RelatedVideos.render(relatedVideos);
         }
     }
+}
+
+// Creates an ID that can be used to store the current state in localStorage.
+function getPerseusStateStorageID(userID, exerciseName, problemGroupNum) {
+    return "perseus-problem-state|" + userID + "|" +
+           exerciseName + "|" + problemGroupNum;
+}
+
+function handleNavigateForward() {
+    return handleNavigate(problemNum + 1);
+}
+
+function handleNavigateBackward() {
+    return handleNavigate(problemNum - 1);
+}
+
+function handleNavigate(questionNumber) {
+    // problemNum generally always equals userExercise.totalDone + 1 (unless
+    // we're in the process of changing problems already in which case they may
+    // get out of sync momentarily). userExercise.totalDone is what
+    // Exercises.nextCard() is driven by though so we modify that directly.
+
+    if (questionNumber < 0 || questionNumber >= Exercises.totalProblems) {
+        // TODO(johnsullivan): The next and previous buttons should be disabled
+        // when it's not possible to use them.
+        return;
+    }
+
+    // STOPSHIP(johnsullivan): Support users without localStorage.
+    if (Exercises.attemptAllAtEnd) {
+        // This saves the currently displayed problem state
+        var exerciseName = Exercises.currentCard.attributes.exerciseName;
+        localStorage.setItem(
+            getPerseusStateStorageID(KA.getUserID(), exerciseName, problemNum),
+            JSON.stringify(PerseusBridge.getSerializedState()));
+    }
+
+    // Note that we can actually set totalDone to a negative value! This seems
+    // to be necessary in order to get nextCard() to behave.
+    // TODO(johnsullivan): Refactor things so nextCard takes in an argument
+    // (and I should probably change the name at that point).
+    userExercise.totalDone = questionNumber - 1;
+    Exercises.nextCard();
+
+    return false;
 }
 
 function handleCheckAnswer() {
@@ -772,6 +823,14 @@ function request(method, data) {
 function readyForNextProblem(e, data) {
     userExercise = data.userExercise;
     problemNum = userExercise.totalDone + 1;
+
+    // STOPSHIP(johnsullivan): Support users without localStorage.
+    if (Exercises.attemptAllAtEnd) {
+        var exerciseName = Exercises.currentCard.attributes.exerciseName;
+        data.savedState = JSON.parse(localStorage.getItem(
+            getPerseusStateStorageID(KA.getUserID(), exerciseName,
+                                     problemNum)));
+    }
 
     $(Exercises).trigger("updateUserExercise", {userExercise: userExercise});
 
