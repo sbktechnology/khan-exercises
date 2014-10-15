@@ -237,7 +237,13 @@ function handleNavigate(questionNumber) {
     // get out of sync momentarily). userExercise.totalDone is what
     // Exercises.nextCard() is driven by though so we modify that directly.
 
-    if (questionNumber < 0 || questionNumber >= Exercises.totalProblems) {
+    if (questionNumber <= 0) {
+        questionNumber = 1;
+    } else if (questionNumber > Exercises.totalProblems) {
+        questionNumber = Exercises.totalProblems;
+    }
+
+    if (questionNumber === problemNum) {
         // TODO(johnsullivan): The next and previous buttons should be disabled
         // when it's not possible to use them.
         return;
