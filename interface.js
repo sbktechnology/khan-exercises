@@ -249,7 +249,6 @@ function handleNavigate(questionNumber) {
         return;
     }
 
-    // STOPSHIP(johnsullivan): Support users without localStorage.
     if (Exercises.attemptAllAtEnd) {
         // This saves the currently displayed problem state
         var exerciseName = Exercises.currentCard.attributes.exerciseName;
@@ -830,7 +829,6 @@ function readyForNextProblem(e, data) {
     userExercise = data.userExercise;
     problemNum = userExercise.totalDone + 1;
 
-    // STOPSHIP(johnsullivan): Support users without localStorage.
     if (Exercises.attemptAllAtEnd) {
         var exerciseName = Exercises.currentCard.attributes.exerciseName;
         data.savedState = JSON.parse(localStorage.getItem(
