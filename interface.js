@@ -69,7 +69,8 @@ $(Exercises)
     .bind("updateUserExercise", updateUserExercise)
     .bind("subhintExpand", subhintExpand)
     .bind("clearExistingProblem", clearExistingProblem)
-    .bind("showOptOut", showOptOut);
+    .bind("showOptOut", showOptOut)
+    .bind("submitAllAttempts", _submitAllAttempts);
 
 
 function problemTemplateRendered() {
@@ -302,7 +303,7 @@ function _submitAllAttempts() {
     var requestQueue = async.queue(function (task, callback) {
         request("problems/" + task.problem + "/attempt",
                 task.exerciseAttemptData).always(callback);
-    }, 1);
+    }, 4);
 
     for (var i = 1; i <= Exercises.totalProblems; ++i) {
         var exerciseAttemptData = allAttemptData[i];
@@ -322,6 +323,10 @@ function _submitAllAttempts() {
         requestQueue.push(
             {problem: i, exerciseAttemptData: exerciseAttemptData});
     }
+
+    requestQueue.drain = function() {
+        $(Exercises).trigger("allAttemptsSubmitted");
+    };
 }
 
 function handleCheckAnswer() {
