@@ -219,8 +219,14 @@ function newProblem(e, data) {
 
 // Creates an ID that can be used to store the current state in localStorage.
 function getPerseusStateStorageID(userID, exerciseName, problemGroupNum) {
-    return "perseus-problem-state|" + userID + "|" +
+    return "ka|perseus-problem-state|" + userID + "|" +
            exerciseName + "|" + problemGroupNum;
+}
+
+// Creates an ID that can be used to store the attempt data for the exercise in
+// localStorage.
+function getAttemptDataStorageID(userID, exerciseName) {
+    return "ka|all-attempt-data|" + userID + "|" + exerciseName;
 }
 
 function handleNavigateForward() {
@@ -249,13 +255,30 @@ function handleNavigate(questionNumber) {
         return;
     }
 
-    if (Exercises.attemptAllAtEnd) {
-        // This saves the currently displayed problem state
-        var exerciseName = Exercises.currentCard.attributes.exerciseName;
-        localStorage.setItem(
-            getPerseusStateStorageID(KA.getUserID(), exerciseName, problemNum),
-            JSON.stringify(PerseusBridge.getSerializedState()));
-    }
+    // The state for all the problems perseus is currently rendering
+    var problemGroupState = {
+        "serializedState": PerseusBridge.getSerializedState()
+    };
+
+    var exerciseName = Exercises.currentCard.attributes.exerciseName;
+    localStorage.setItem(
+        getPerseusStateStorageID(KA.getUserID(), exerciseName, problemNum),
+        JSON.stringify(problemGroupState));
+
+    var attemptDataStorageID = getAttemptDataStorageID(KA.getUserID(),
+                                                       exerciseName);
+    var allAttemptData =
+        JSON.parse(localStorage.getItem(attemptDataStorageID)) || {};
+    // TODO(johnsullivan): When Aria finalizes her changes to allow
+    // for multiple widgets on a single page, I should integrate
+    // them here.
+    var score = PerseusBridge.scoreInput();
+    allAttemptData[problemNum] = buildAttemptData(
+        score.correct, 1, JSON.stringify(score.guess), 0,
+        score.empty, false);
+
+    localStorage.setItem(attemptDataStorageID,
+                         JSON.stringify(allAttemptData));
 
     // Note that we can actually set totalDone to a negative value! This seems
     // to be necessary in order to get nextCard() to behave.
@@ -265,6 +288,40 @@ function handleNavigate(questionNumber) {
     Exercises.nextCard();
 
     return false;
+}
+
+// This function is not yet used and must be activated from the console. This
+// will be used by the SAT code very soon.
+function _submitAllAttempts() {
+    var exerciseName = Exercises.currentCard.attributes.exerciseName;
+    var attemptDataStorageID = getAttemptDataStorageID(KA.getUserID(),
+                                                       exerciseName);
+    var allAttemptData = JSON.parse(
+        localStorage.getItem(attemptDataStorageID)) || {};
+
+    var requestQueue = async.queue(function (task, callback) {
+        request("problems/" + task.problem + "/attempt",
+                task.exerciseAttemptData).always(callback);
+    }, 1);
+
+    for (var i = 1; i <= Exercises.totalProblems; ++i) {
+        var exerciseAttemptData = allAttemptData[i];
+        if (!exerciseAttemptData) {
+            // The user has never even looked at the problem
+            exerciseAttemptData = buildAttemptData(false, 1, "", 0, true,
+                                                   false);
+        }
+
+        // We need to mark each problem as "complete", otherwise we won't be
+        // able to register attempts for all the problems. Unfortunately, right
+        // now "complete" is equivalent to "correct", so this is very
+        // deceptive.
+        // TODO(johnsullivan): Lie to the server less.
+        exerciseAttemptData['complete'] = 1;
+
+        requestQueue.push(
+            {problem: i, exerciseAttemptData: exerciseAttemptData});
+    }
 }
 
 function handleCheckAnswer() {
@@ -460,7 +517,7 @@ function handleAttempt(data) {
     // This needs to be after all updates to Exercises.currentCard (such as the
     // "problemDone" event) or it will send incorrect data to the server
     var attemptData = buildAttemptData(
-            score.correct, ++attempts, stringifiedGuess, timeTaken, skipped,
+            score.correct, ++attempts, JSON.stringify(score.guess), 0, skipped,
             optOut);
 
     // Save the problem results to the server
@@ -831,9 +888,10 @@ function readyForNextProblem(e, data) {
 
     if (Exercises.attemptAllAtEnd) {
         var exerciseName = Exercises.currentCard.attributes.exerciseName;
-        data.savedState = JSON.parse(localStorage.getItem(
+        var storedState = JSON.parse(localStorage.getItem(
             getPerseusStateStorageID(KA.getUserID(), exerciseName,
                                      problemNum)));
+        data.savedState = storedState ? storedState["serializedState"] : null;
     }
 
     $(Exercises).trigger("updateUserExercise", {userExercise: userExercise});
